@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>名刺キャプチャ — MW Phase 1 POC v4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Serif+JP:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b1018; --bg-elev: #131a25; --bg-elev2: #1a2230;
+    --line: #2a3445; --line-strong: #3d4a5f;
+    --text: #e6ebf2; --text-dim: #8a96a8; --text-faint: #5a6678;
+    --accent: #d4a854; --accent-dim: #8c6f3a;
+    --danger: #e0594a; --ok: #6fbf73; --info: #5c9fde;
+    --sans: "Noto Sans JP", system-ui, -apple-system, sans-serif;
+    --serif: "Noto Serif JP", serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bot: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.5; }
+  body { display: flex; flex-direction: column; padding-top: var(--safe-top); padding-bottom: var(--safe-bot); }
+
+  header {
+    flex: 0 0 auto; padding: 12px 16px;
+    border-bottom: 1px solid var(--line); background: var(--bg-elev);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  header .brand { display: flex; align-items: baseline; gap: 8px; }
+  header .brand .logo { font-family: var(--serif); font-size: 16px; letter-spacing: 0.04em; color: var(--accent); }
+  header .brand .sub { font-family: var(--mono); font-size: 10px; color: var(--text-faint); letter-spacing: 0.1em; text-transform: uppercase; }
+  header .session { font-family: var(--mono); font-size: 10px; color: var(--text-dim); }
+  header .session .count { color: var(--accent); font-weight: 500; }
+
+  .tabs { flex: 0 0 auto; display: flex; background: var(--bg-elev); border-bottom: 1px solid var(--line); }
+  .tabs button {
+    flex: 1; padding: 10px 8px; background: transparent; border: none;
+    color: var(--text-dim); font-family: var(--sans); font-size: 12px; font-weight: 500;
+    border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.15s;
+  }
+  .tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tabs button:disabled { opacity: 0.3; }
+
+  main { flex: 1; min-height: 0; position: relative; }
+  .view { position: absolute; inset: 0; display: none; flex-direction: column; }
+  .view.active { display: flex; }
+
+  /* Capture view */
+  #view-capture { background: var(--bg); overflow-y: auto; }
+  .mode-selector { padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--bg-elev); }
+  .mode-selector .label { font-family: var(--mono); font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+  .mode-buttons { display: flex; gap: 8px; }
+  .mode-btn {
+    flex: 1; padding: 10px; background: var(--bg-elev2);
+    border: 1px solid var(--line-strong); border-radius: 3px;
+    color: var(--text-dim); font-size: 12px; cursor: pointer;
+    display: flex; flex-direction: column; justify-content: center; gap: 3px;
+    text-align: center;
+  }
+  .mode-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .mode-btn .mode-name { font-weight: 700; font-size: 13px; }
+  .mode-btn .mode-desc { font-size: 10px; opacity: 0.85; }
+
+  /* Native mode */
+  .native-mode {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 24px; text-align: center; gap: 16px;
+  }
+  .native-mode .big-icon {
+    width: 96px; height: 96px; border: 2px solid var(--accent);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    color: var(--accent); font-size: 40px;
+  }
+  .native-mode h2 { font-family: var(--serif); font-size: 20px; }
+  .native-mode p { color: var(--text-dim); font-size: 13px; max-width: 320px; }
+  .native-mode .file-input { display: none; }
+  .native-mode label.shutter {
+    background: var(--accent); color: var(--bg);
+    padding: 16px 32px; border-radius: 3px;
+    font-weight: 700; font-size: 14px; cursor: pointer;
+    display: inline-block; min-width: 200px;
+  }
+  .native-mode .hint {
+    font-family: var(--mono); font-size: 10px; color: var(--text-faint);
+    margin-top: 8px; max-width: 320px; text-align: left;
+    background: var(--bg-elev); padding: 10px 12px; border-radius: 3px;
+    border-left: 2px solid var(--accent-dim);
+  }
+
+  /* ═══ LIVE MODE — v4 ═══ */
+  .live-mode { flex: 1; display: flex; flex-direction: column; background: #000; min-height: 360px; }
+
+  /* Status banner — top of video, full-width */
+  .status-banner {
+    flex: 0 0 auto;
+    background: var(--bg-elev2);
+    border-bottom: 1px solid var(--line);
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .status-icon {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--bg); border: 2px solid var(--text-faint);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+    transition: all 0.2s;
+  }
+  .status-icon.ok      { border-color: var(--ok);     color: var(--ok); }
+  .status-icon.detect  { border-color: var(--accent); color: var(--accent); }
+  .status-icon.lock    { border-color: var(--ok); background: var(--ok); color: #000; animation: pulse-ring 0.8s infinite; }
+  .status-icon.capture { border-color: var(--accent); background: var(--accent); color: #000; }
+  .status-icon.error   { border-color: var(--danger); color: var(--danger); }
+  @keyframes pulse-ring { 0%,100% { box-shadow: 0 0 0 0 rgba(111,191,115,0.6) } 50% { box-shadow: 0 0 0 8px rgba(111,191,115,0) } }
+
+  .status-text { flex: 1; min-width: 0; }
+  .status-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .status-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; font-family: var(--mono); }
+  .countdown {
+    font-family: var(--mono); font-size: 20px; font-weight: 600;
+    color: var(--ok); min-width: 50px; text-align: right;
+  }
+
+  .video-wrap {
+    flex: 1; position: relative; overflow: hidden; background: #000;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 280px;
+  }
+  #cam {
+    max-width: 100%; max-height: 100%; width: auto; height: auto;
+    object-fit: contain; display: block;
+  }
+  #detect-canvas { display: none; }
+
+  /* Start overlay — shown when camera not started */
+  .start-overlay {
+    position: absolute; inset: 0; z-index: 5;
+    background: rgba(11,16,24,0.92);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 16px;
+    padding: 24px;
+  }
+  .start-overlay.hidden { display: none; }
+  .start-overlay .icon {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: var(--accent); color: var(--bg);
+    display: flex; align-items: center; justify-content: center; font-size: 32px;
+  }
+  .start-overlay h3 { font-family: var(--serif); font-size: 18px; }
+  .start-overlay p { font-size: 12px; color: var(--text-dim); text-align: center; max-width: 280px; }
+  .start-overlay button {
+    background: var(--accent); color: var(--bg);
+    border: none; padding: 14px 32px; border-radius: 3px;
+    font-size: 14px; font-weight: 700; cursor: pointer; min-width: 180px;
+  }
+
+  /* Capture flash overlay */
+  .flash-overlay {
+    position: absolute; inset: 0; background: #fff;
+    pointer-events: none; opacity: 0; z-index: 6;
+    transition: opacity 0.05s;
+  }
+  .flash-overlay.fire { opacity: 0.9; transition: opacity 0.4s; }
+
+  /* Card guide + progress ring */
+  .card-guide {
+    position: absolute;
+    border: 2px dashed rgba(212,168,84,0.7);
+    border-radius: 4px; pointer-events: none;
+    transition: border-color 0.15s;
+  }
+  .card-guide.locked {
+    border-style: solid; border-color: var(--ok);
+    box-shadow: 0 0 24px rgba(111,191,115,0.4);
+  }
+  /* SVG progress ring positioned absolutely within video-wrap */
+  .progress-ring { position: absolute; pointer-events: none; }
+  .progress-ring circle {
+    fill: none; stroke-width: 4;
+    transition: stroke-dashoffset 0.08s linear;
+  }
+  .progress-ring .bg { stroke: rgba(11,16,24,0.4); }
+  .progress-ring .fg { stroke: var(--ok); stroke-linecap: round; transform: rotate(-90deg); transform-origin: center; }
+
+  /* Bottom controls */
+  .controls-bar {
+    flex: 0 0 auto;
+    background: var(--bg-elev2);
+    border-top: 1px solid var(--line);
+    padding: 12px 16px;
+    padding-bottom: calc(12px + var(--safe-bot));
+  }
+  .metrics-row {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px; margin-bottom: 12px;
+  }
+  .metric-cell {
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: 3px; padding: 6px 8px;
+    text-align: center;
+  }
+  .metric-cell.good { border-color: var(--ok); }
+  .metric-cell.bad  { border-color: var(--danger); }
+  .metric-label { font-family: var(--mono); font-size: 9px; color: var(--text-faint); letter-spacing: 0.08em; text-transform: uppercase; }
+  .metric-value { font-family: var(--mono); font-size: 11px; font-weight: 600; margin-top: 2px; color: var(--text); }
+  .metric-value.good { color: var(--ok); }
+  .metric-value.bad  { color: var(--danger); }
+
+  .controls-row { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+  .btn-stop {
+    background: var(--bg); border: 1px solid var(--danger);
+    color: var(--danger); padding: 10px 14px; border-radius: 3px;
+    font-size: 12px; font-weight: 600; min-height: 44px; cursor: pointer;
+  }
+  .btn-shutter {
+    width: 60px; height: 60px; border-radius: 50%; background: var(--accent);
+    border: 4px solid #fff; box-shadow: 0 0 0 2px var(--accent);
+    cursor: pointer; transition: transform 0.1s;
+  }
+  .btn-shutter:active { transform: scale(0.9); }
+  .btn-secondary {
+    background: var(--bg); border: 1px solid var(--line-strong);
+    color: var(--text); padding: 10px 14px; border-radius: 3px;
+    font-size: 12px; min-height: 44px; cursor: pointer; min-width: 70px;
+  }
+  .btn-secondary.on { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+  .unavailable-banner {
+    margin: 16px; padding: 14px;
+    background: rgba(224,89,74,0.1);
+    border: 1px solid var(--danger); border-radius: 3px;
+    font-size: 12px; color: var(--text);
+  }
+  .unavailable-banner h3 { color: var(--danger); margin-bottom: 6px; font-size: 13px; }
+  .unavailable-banner code { font-family: var(--mono); font-size: 11px; background: var(--bg); padding: 1px 4px; border-radius: 2px; word-break: break-all; }
+
+  /* Review view */
+  #view-review { background: var(--bg); overflow-y: auto; }
+  .review-img-wrap { background: #000; max-height: 32vh; display: flex; align-items: center; justify-content: center; overflow: hidden; border-bottom: 1px solid var(--line); }
+  .review-img-wrap img { max-width: 100%; max-height: 32vh; display: block; }
+  .review-status { padding: 10px 16px; background: var(--bg-elev); border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 11px; display: flex; align-items: center; gap: 10px; }
+  .spinner { width: 12px; height: 12px; border: 2px solid var(--text-faint); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  .fields { padding: 16px; display: flex; flex-direction: column; gap: 12px; padding-bottom: 80px; }
+  .field-group { background: var(--bg-elev); border: 1px solid var(--line); border-radius: 3px; padding: 10px 12px; }
+  .field-label { font-family: var(--mono); font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .field-input { width: 100%; background: transparent; border: none; color: var(--text); font-family: var(--sans); font-size: 15px; padding: 2px 0; outline: none; }
+  .field-input.mono { font-family: var(--mono); font-size: 14px; }
+  .field-input::placeholder { color: var(--text-faint); }
+  .field-input:focus { color: var(--accent); }
+  textarea.field-input { resize: vertical; min-height: 60px; font-size: 13px; }
+  .security-row { background: var(--bg-elev); border: 1px solid var(--line); border-radius: 3px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .sec-title { font-family: var(--mono); font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.08em; }
+  .sec-options { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sec-pill { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line-strong); background: transparent; color: var(--text-dim); font-size: 12px; cursor: pointer; }
+  .sec-pill.active.normal { background: var(--info); border-color: var(--info); color: #fff; }
+  .sec-pill.active.confidential { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .review-actions { position: fixed; bottom: 0; left: 0; right: 0; padding: 12px 16px; padding-bottom: calc(12px + var(--safe-bot)); background: var(--bg-elev); border-top: 1px solid var(--line); display: flex; gap: 10px; z-index: 5; }
+  .btn-primary { flex: 1; padding: 14px; background: var(--accent); color: var(--bg); border: none; border-radius: 3px; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .btn-ghost { padding: 14px 18px; background: transparent; color: var(--text-dim); border: 1px solid var(--line-strong); border-radius: 3px; font-size: 14px; cursor: pointer; }
+
+  /* List */
+  #view-list { background: var(--bg); overflow-y: auto; }
+  .list-header { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; background: var(--bg-elev); }
+  .list-header h2 { font-family: var(--serif); font-size: 16px; font-weight: 600; }
+  .list-header .actions { display: flex; gap: 8px; }
+  .list-header button { background: transparent; border: 1px solid var(--line-strong); color: var(--text-dim); padding: 6px 10px; border-radius: 3px; font-size: 11px; font-family: var(--mono); cursor: pointer; }
+  .card-list { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .card-item { background: var(--bg-elev); border: 1px solid var(--line); border-radius: 3px; padding: 12px; display: flex; gap: 12px; cursor: pointer; }
+  .card-item.confidential { border-left: 3px solid var(--danger); }
+  .card-item.normal { border-left: 3px solid var(--info); }
+  .card-thumb { width: 64px; height: 40px; background: #000; border-radius: 2px; flex-shrink: 0; object-fit: cover; }
+  .card-meta { flex: 1; min-width: 0; }
+  .card-meta .name { font-size: 15px; font-weight: 700; }
+  .card-meta .company { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .card-meta .title-line { font-family: var(--mono); font-size: 10px; color: var(--text-faint); margin-top: 4px; }
+  .card-meta .sec-flag { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 2px; font-size: 9px; vertical-align: middle; }
+  .card-meta .sec-flag.confidential { background: var(--danger); color: #fff; }
+  .empty-state { padding: 60px 20px; text-align: center; color: var(--text-faint); }
+
+  .toast { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); background: var(--bg-elev2); border: 1px solid var(--line-strong); padding: 10px 16px; border-radius: 3px; font-family: var(--mono); font-size: 12px; z-index: 1000; max-width: 90vw; }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+  .toast.ok { border-color: var(--ok); color: var(--ok); }
+
+  .diag-toggle {
+    margin: 12px 16px; padding: 6px 10px;
+    background: var(--bg-elev); border: 1px solid var(--line); border-radius: 3px;
+    color: var(--text-dim); font-family: var(--mono); font-size: 10px;
+    cursor: pointer; display: flex; align-items: center; gap: 6px;
+  }
+  .diag { background: var(--bg-elev); border: 1px solid var(--line); border-radius: 3px; margin: 0 16px 12px; padding: 10px 12px; font-family: var(--mono); font-size: 10px; color: var(--text-dim); max-height: 200px; overflow-y: auto; display: none; }
+  .diag.open { display: block; }
+  .diag .line { margin: 2px 0; word-break: break-all; }
+  .diag .line.err { color: var(--danger); }
+  .diag .line.ok { color: var(--ok); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="logo">MetroWeather</span>
+    <span class="sub">名刺 · Phase 1 v4</span>
+  </div>
+  <div class="session">SESSION <span class="count" id="count">0</span></div>
+</header>
+
+<nav class="tabs">
+  <button data-view="capture" class="active">撮影</button>
+  <button data-view="review" id="tab-review" disabled>確認</button>
+  <button data-view="list">一覧</button>
+</nav>
+
+<main>
+  <section id="view-capture" class="view active">
+    <div class="mode-selector">
+      <div class="label">撮影モード</div>
+      <div class="mode-buttons">
+        <button class="mode-btn active" id="mode-native">
+          <div class="mode-name">📷 標準カメラ</div>
+          <div class="mode-desc">確実に動作 (推奨)</div>
+        </button>
+        <button class="mode-btn" id="mode-live">
+          <div class="mode-name">🎥 動画＋自動検出</div>
+          <div class="mode-desc">ホスト時のみ</div>
+        </button>
+      </div>
+    </div>
+
+    <div class="native-mode" id="pane-native">
+      <div class="big-icon">📷</div>
+      <h2>名刺を撮影</h2>
+      <p>iPhone標準カメラで1枚ずつ撮影します。<br>撮影後すぐに Claude Vision で解析されます。</p>
+      <label class="shutter">
+        撮影する
+        <input type="file" accept="image/*" capture="environment" class="file-input" id="file-input">
+      </label>
+      <div class="hint">
+        <strong>💡 撮影のコツ:</strong><br>
+        • 名刺全体が画面に収まるように<br>
+        • 明るい場所で水平に構える<br>
+        • 1枚撮影 → 解析 → 次の1枚 のサイクル
+      </div>
+    </div>
+
+    <div class="live-mode" id="pane-live" style="display:none">
+
+      <!-- Status banner -->
+      <div class="status-banner" id="status-banner">
+        <div class="status-icon" id="status-icon">▷</div>
+        <div class="status-text">
+          <div class="status-title" id="status-title">カメラ未起動</div>
+          <div class="status-sub"  id="status-sub">「カメラを開始」を押してください</div>
+        </div>
+        <div class="countdown" id="countdown" style="visibility:hidden">—</div>
+      </div>
+
+      <div class="video-wrap" id="video-wrap">
+        <video id="cam" autoplay playsinline muted></video>
+        <canvas id="detect-canvas"></canvas>
+        <div class="card-guide" id="guide" style="display:none"></div>
+        <svg class="progress-ring" id="ring" style="display:none">
+          <circle class="bg" id="ring-bg"></circle>
+          <circle class="fg" id="ring-fg"></circle>
+        </svg>
+        <div class="flash-overlay" id="flash"></div>
+        <div class="start-overlay" id="start-overlay">
+          <div class="icon">▶</div>
+          <h3>動画モードを開始</h3>
+          <p>カメラを起動し、名刺を枠内に収めると自動撮影します。手動でも撮影できます。</p>
+          <button id="btn-start">カメラを開始</button>
+        </div>
+      </div>
+
+      <div class="controls-bar" id="controls-bar" style="display:none">
+        <div class="metrics-row">
+          <div class="metric-cell" id="cell-focus">
+            <div class="metric-label">焦点</div>
+            <div class="metric-value" id="m-focus">—</div>
+          </div>
+          <div class="metric-cell" id="cell-stable">
+            <div class="metric-label">静止</div>
+            <div class="metric-value" id="m-stable">—</div>
+          </div>
+          <div class="metric-cell" id="cell-bright">
+            <div class="metric-label">明度</div>
+            <div class="metric-value" id="m-bright">—</div>
+          </div>
+        </div>
+        <div class="controls-row">
+          <button class="btn-stop" id="btn-stop">■ 停止</button>
+          <button class="btn-shutter" id="btn-shutter" aria-label="撮影"></button>
+          <button class="btn-secondary on" id="btn-auto">AUTO</button>
+        </div>
+      </div>
+
+      <div id="live-error-area"></div>
+    </div>
+
+    <button class="diag-toggle" id="diag-toggle">▼ 診断ログ</button>
+    <div class="diag" id="diag"><div id="diag-body"></div></div>
+  </section>
+
+  <section id="view-review" class="view">
+    <div class="review-img-wrap"><img id="review-img" alt=""></div>
+    <div class="review-status" id="review-status">
+      <div class="spinner"></div><span>Claude Vision で解析中...</span>
+    </div>
+    <div class="fields" id="fields-container"></div>
+    <div class="review-actions">
+      <button class="btn-ghost" id="btn-retake">撮り直し</button>
+      <button class="btn-primary" id="btn-save">保存</button>
+    </div>
+  </section>
+
+  <section id="view-list" class="view">
+    <div class="list-header">
+      <h2>収集済み名刺</h2>
+      <div class="actions">
+        <button id="btn-export">JSON出力</button>
+        <button id="btn-clear">クリア</button>
+      </div>
+    </div>
+    <div class="card-list" id="card-list"></div>
+  </section>
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//   MetroWeather 名刺キャプチャ — Phase 1 POC v4
+//   UX強化: 明示的なカメラ制御 + ステータスバナー + カウントダウン
+// ═══════════════════════════════════════════════════════════════════
+
+const StableThresholdFrames = 12;  // ~1秒 @ 12fps
+const DetectFPS = 12;
+
+const State = {
+  cards: [], current: null,
+  stream: null, facingMode: 'environment',
+  autoCapture: true, ocrInflight: false,
+  stableFrames: 0,
+  lastCaptureTs: 0, COOLDOWN_MS: 2000,
+  mode: 'native',
+  videoGeom: null, roi: null,
+  // Camera state machine
+  camera: 'idle',     // 'idle' | 'starting' | 'running' | 'error'
+  detect: 'waiting',  // 'waiting' | 'detecting' | 'locked' | 'capturing'
+};
+
+const FIELDS = [
+  { key: 'company',      label: '社名',           mono: false },
+  { key: 'department',   label: '部署',           mono: false },
+  { key: 'title',        label: '役職',           mono: false },
+  { key: 'name',         label: '氏名',           mono: false },
+  { key: 'name_reading', label: 'ふりがな / Roman',mono: false },
+  { key: 'email',        label: 'Email',          mono: true  },
+  { key: 'phone',        label: 'TEL (固定)',     mono: true  },
+  { key: 'mobile',       label: 'TEL (携帯)',     mono: true  },
+  { key: 'fax',          label: 'FAX',            mono: true  },
+  { key: 'postal_code',  label: '〒',             mono: true  },
+  { key: 'address',      label: '住所',           mono: false, multiline: true },
+  { key: 'website',      label: 'Website',        mono: false, multiline: true },
+  { key: 'other',        label: 'その他メモ',     mono: false, multiline: true },
+];
+
+const $ = (id) => document.getElementById(id);
+
+function diag(msg, kind='') {
+  const line = document.createElement('div');
+  line.className = 'line ' + kind;
+  const ts = new Date().toLocaleTimeString('ja-JP', { hour12: false });
+  line.textContent = `[${ts}] ${msg}`;
+  $('diag-body').appendChild(line);
+  $('diag-body').scrollTop = $('diag-body').scrollHeight;
+}
+
+function toast(msg, kind='') {
+  const t = document.createElement('div');
+  t.className = `toast ${kind}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
+
+// ─── Status banner update ───
+function setStatus(detectState) {
+  State.detect = detectState;
+  const icon = $('status-icon');
+  const title = $('status-title');
+  const sub = $('status-sub');
+  const countdown = $('countdown');
+
+  icon.className = 'status-icon';
+  countdown.style.visibility = 'hidden';
+
+  switch (detectState) {
+    case 'idle':
+      icon.textContent = '▷';
+      title.textContent = 'カメラ未起動';
+      sub.textContent = '「カメラを開始」を押してください';
+      break;
+    case 'starting':
+      icon.textContent = '⌛';
+      icon.className = 'status-icon detect';
+      title.textContent = 'カメラ起動中...';
+      sub.textContent = '少々お待ちください';
+      break;
+    case 'waiting':
+      icon.textContent = '📇';
+      icon.className = 'status-icon ok';
+      title.textContent = '名刺を枠内に配置';
+      sub.textContent = '焦点・静止・明度が揃うのを待っています';
+      break;
+    case 'detecting':
+      icon.textContent = '🔄';
+      icon.className = 'status-icon detect';
+      title.textContent = '位置調整中...';
+      sub.textContent = '指標が緑になるよう調整してください';
+      break;
+    case 'locked':
+      icon.textContent = '●';
+      icon.className = 'status-icon lock';
+      title.textContent = '撮影します';
+      sub.textContent = 'そのまま動かさないでください';
+      countdown.style.visibility = 'visible';
+      break;
+    case 'capturing':
+      icon.textContent = '✓';
+      icon.className = 'status-icon capture';
+      title.textContent = '撮影完了！';
+      sub.textContent = 'Claude Vision に送信中...';
+      break;
+    case 'error':
+      icon.textContent = '✕';
+      icon.className = 'status-icon error';
+      title.textContent = 'エラー';
+      sub.textContent = '診断ログを確認してください';
+      break;
+  }
+}
+
+function setCountdown(framesRemaining) {
+  if (framesRemaining <= 0) {
+    $('countdown').textContent = '0.0s';
+  } else {
+    const seconds = framesRemaining / DetectFPS;
+    $('countdown').textContent = seconds.toFixed(1) + 's';
+  }
+}
+
+// ─── Initial diagnostic ───
+function runInitialDiagnostic() {
+  diag(`UA: ${navigator.userAgent.slice(0, 70)}`);
+  diag(`Protocol: ${location.protocol} ${location.host || '(local)'}`);
+  diag(`Secure context: ${window.isSecureContext}`, window.isSecureContext ? 'ok' : 'err');
+  diag(`getUserMedia: ${!!(navigator.mediaDevices?.getUserMedia)}`, navigator.mediaDevices?.getUserMedia ? 'ok' : 'err');
+  diag(`In iframe: ${window.self !== window.top}`, window.self === window.top ? 'ok' : 'err');
+  diag(`Screen: ${window.innerWidth}×${window.innerHeight} DPR=${window.devicePixelRatio}`);
+}
+
+// ─── Diag toggle ───
+$('diag-toggle').addEventListener('click', () => {
+  $('diag').classList.toggle('open');
+  $('diag-toggle').textContent = $('diag').classList.contains('open') ? '▲ 診断ログ' : '▼ 診断ログ';
+});
+
+// ─── Mode switching ───
+$('mode-native').addEventListener('click', () => switchMode('native'));
+$('mode-live').addEventListener('click',   () => switchMode('live'));
+
+function switchMode(mode) {
+  State.mode = mode;
+  $('mode-native').classList.toggle('active', mode === 'native');
+  $('mode-live').classList.toggle('active',   mode === 'live');
+  $('pane-native').style.display = mode === 'native' ? 'flex' : 'none';
+  $('pane-live').style.display   = mode === 'live'   ? 'flex' : 'none';
+  if (mode !== 'live' && State.camera === 'running') stopLiveCamera();
+}
+
+// ─── Native camera ───
+$('file-input').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  diag(`File: ${file.name} ${(file.size/1024).toFixed(0)}KB ${file.type}`, 'ok');
+  const dataUrl = await fileToDataUrl(file);
+  const processed = await processImage(dataUrl);
+  beginReview(processed);
+  e.target.value = '';
+});
+
+function fileToDataUrl(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+async function processImage(dataUrl) {
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 1600;
+      const scale = Math.min(1, maxW / img.naturalWidth);
+      const W = Math.round(img.naturalWidth  * scale);
+      const H = Math.round(img.naturalHeight * scale);
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      c.getContext('2d').drawImage(img, 0, 0, W, H);
+      res(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.src = dataUrl;
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//   LIVE VIDEO — explicit start/stop control
+// ═══════════════════════════════════════════════════════════════════
+
+$('btn-start').addEventListener('click', startLiveCamera);
+$('btn-stop').addEventListener('click',  stopLiveCamera);
+
+async function startLiveCamera() {
+  if (State.camera === 'running' || State.camera === 'starting') return;
+  State.camera = 'starting';
+  setStatus('starting');
+  diag('Live: requesting camera...');
+  $('live-error-area').innerHTML = '';
+
+  try {
+    if (State.stream) State.stream.getTracks().forEach(t => t.stop());
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('navigator.mediaDevices.getUserMedia not available');
+    }
+    State.stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: State.facingMode },
+        width:  { ideal: 1920 },
+        height: { ideal: 1080 },
+      },
+    });
+    const video = $('cam');
+    video.srcObject = State.stream;
+    await video.play();
+    await new Promise(r => requestAnimationFrame(r));
+
+    diag(`Camera: ${video.videoWidth}×${video.videoHeight} (AR=${(video.videoWidth/video.videoHeight).toFixed(3)})`, 'ok');
+
+    // Show UI elements
+    $('start-overlay').classList.add('hidden');
+    $('guide').style.display = 'block';
+    $('ring').style.display = 'block';
+    $('controls-bar').style.display = 'block';
+
+    State.camera = 'running';
+    updateVideoGeometry();
+    setStatus('waiting');
+    startDetectLoop();
+  } catch (e) {
+    State.camera = 'error';
+    setStatus('error');
+    diag(`Live camera FAILED: ${e.name}: ${e.message}`, 'err');
+    $('live-error-area').innerHTML = `
+      <div class="unavailable-banner">
+        <h3>動画モードが使えません</h3>
+        <div>エラー: <code>${e.name}: ${e.message}</code></div>
+        <div style="margin-top:8px"><strong>対処</strong>: 「📷 標準カメラ」に戻ってください。</div>
+      </div>
+    `;
+  }
+}
+
+function stopLiveCamera() {
+  if (State.stream) {
+    State.stream.getTracks().forEach(t => t.stop());
+    State.stream = null;
+  }
+  cancelAnimationFrame(detectRAF);
+  State.camera = 'idle';
+  State.stableFrames = 0;
+
+  // Hide UI
+  $('start-overlay').classList.remove('hidden');
+  $('guide').style.display = 'none';
+  $('ring').style.display = 'none';
+  $('controls-bar').style.display = 'none';
+  setStatus('idle');
+  diag('Camera stopped');
+}
+
+// ─── Geometry ───
+function computeVideoGeom() {
+  const video = $('cam');
+  const wrap  = $('video-wrap');
+  if (!video.videoWidth) return null;
+
+  const wrapW = wrap.clientWidth;
+  const wrapH = wrap.clientHeight;
+  const vidAR = video.videoWidth / video.videoHeight;
+  const wrapAR = wrapW / wrapH;
+
+  let renderW, renderH;
+  if (vidAR > wrapAR) { renderW = wrapW; renderH = wrapW / vidAR; }
+  else                { renderH = wrapH; renderW = wrapH * vidAR; }
+  const offsetX = (wrapW - renderW) / 2;
+  const offsetY = (wrapH - renderH) / 2;
+
+  const cardAR = 91 / 55;
+  let guideW = renderW * 0.86;
+  let guideH = guideW / cardAR;
+  if (guideH > renderH * 0.86) {
+    guideH = renderH * 0.86;
+    guideW = guideH * cardAR;
+  }
+  const guideX = offsetX + (renderW - guideW) / 2;
+  const guideY = offsetY + (renderH - guideH) / 2;
+
+  return { wrapW, wrapH, renderW, renderH, offsetX, offsetY, guideX, guideY, guideW, guideH };
+}
+
+function updateVideoGeometry() {
+  const g = computeVideoGeom();
+  if (!g) return;
+  State.videoGeom = g;
+
+  const guide = $('guide');
+  guide.style.left   = g.guideX + 'px';
+  guide.style.top    = g.guideY + 'px';
+  guide.style.width  = g.guideW + 'px';
+  guide.style.height = g.guideH + 'px';
+
+  // Progress ring — circle around the card guide
+  // Place the SVG to enclose the guide
+  const ring = $('ring');
+  const padding = 14;
+  const ringSize = Math.min(g.guideW, g.guideH) * 0.30;
+  // Position ring as a small circle in the top-right corner of the guide
+  const ringX = g.guideX + g.guideW - ringSize - padding;
+  const ringY = g.guideY + padding;
+  ring.style.left = ringX + 'px';
+  ring.style.top  = ringY + 'px';
+  ring.setAttribute('width',  ringSize);
+  ring.setAttribute('height', ringSize);
+
+  const r = ringSize / 2 - 4;
+  const cx = ringSize / 2, cy = ringSize / 2;
+  const C = 2 * Math.PI * r;
+  $('ring-bg').setAttribute('cx', cx);
+  $('ring-bg').setAttribute('cy', cy);
+  $('ring-bg').setAttribute('r',  r);
+  $('ring-fg').setAttribute('cx', cx);
+  $('ring-fg').setAttribute('cy', cy);
+  $('ring-fg').setAttribute('r',  r);
+  $('ring-fg').setAttribute('stroke-dasharray',  C);
+  $('ring-fg').setAttribute('stroke-dashoffset', C); // start empty
+
+  const video = $('cam');
+  const fracX = (g.guideX - g.offsetX) / g.renderW;
+  const fracY = (g.guideY - g.offsetY) / g.renderH;
+  const fracW = g.guideW / g.renderW;
+  const fracH = g.guideH / g.renderH;
+  State.roi = {
+    sx: Math.round(fracX * video.videoWidth),
+    sy: Math.round(fracY * video.videoHeight),
+    sw: Math.round(fracW * video.videoWidth),
+    sh: Math.round(fracH * video.videoHeight),
+    ringC: C,
+  };
+
+  diag(`Geom: render=${g.renderW.toFixed(0)}×${g.renderH.toFixed(0)} guide=${g.guideW.toFixed(0)}×${g.guideH.toFixed(0)} ROI=${State.roi.sw}×${State.roi.sh}`);
+}
+
+function updateProgressRing(framesRemaining) {
+  if (!State.roi) return;
+  const C = State.roi.ringC;
+  const total = StableThresholdFrames;
+  const progress = Math.max(0, (total - framesRemaining) / total);
+  $('ring-fg').setAttribute('stroke-dashoffset', C * (1 - progress));
+}
+
+window.addEventListener('resize', () => { if (State.camera === 'running') updateVideoGeometry(); });
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => { if (State.camera === 'running') updateVideoGeometry(); }, 300);
+});
+
+// ─── Detection ───
+let detectRAF = null;
+let prevSampleData = null;
+
+function startDetectLoop() {
+  cancelAnimationFrame(detectRAF);
+  let lastTick = 0;
+  const TICK_MS = 1000 / DetectFPS;
+  function loop(ts) {
+    if (ts - lastTick > TICK_MS) {
+      lastTick = ts;
+      try { measureFrame(); } catch(e) {}
+    }
+    detectRAF = requestAnimationFrame(loop);
+  }
+  detectRAF = requestAnimationFrame(loop);
+}
+
+function measureFrame() {
+  const video = $('cam');
+  if (!video.videoWidth || !State.roi) return;
+
+  const W = 200, H = 120;
+  const dc = $('detect-canvas');
+  dc.width = W; dc.height = H;
+  const dctx = dc.getContext('2d', { willReadFrequently: true });
+
+  const { sx, sy, sw, sh } = State.roi;
+  dctx.drawImage(video, sx, sy, sw, sh, 0, 0, W, H);
+  const data = dctx.getImageData(0, 0, W, H).data;
+
+  let sum = 0;
+  const lumas = new Float32Array(W * H);
+  for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+    const l = 0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2];
+    lumas[j] = l; sum += l;
+  }
+  const meanLuma = sum / (W*H);
+
+  let lapSum = 0, lapSumSq = 0, lapN = 0;
+  for (let y = 1; y < H-1; y++) {
+    for (let x = 1; x < W-1; x++) {
+      const idx = y*W + x;
+      const lap = 4*lumas[idx] - lumas[idx-1] - lumas[idx+1] - lumas[idx-W] - lumas[idx+W];
+      lapSum += lap; lapSumSq += lap*lap; lapN++;
+    }
+  }
+  const lapMean = lapSum / lapN;
+  const lapVar = lapSumSq / lapN - lapMean*lapMean;
+
+  let diffSum = 0;
+  if (prevSampleData) {
+    const step = 4 * 8;
+    for (let i = 0; i < data.length; i += step) diffSum += Math.abs(data[i] - prevSampleData[i]);
+  }
+  prevSampleData = new Uint8ClampedArray(data);
+  const diffNorm = diffSum / (W*H/8);
+
+  const focusGood  = lapVar > 80;
+  const stableGood = diffNorm < 3.0;
+  const brightGood = meanLuma > 60 && meanLuma < 220;
+
+  // Words instead of pure numbers
+  $('m-focus').textContent  = focusGood ? `OK ${lapVar.toFixed(0)}` : (lapVar < 30 ? `ボケ ${lapVar.toFixed(0)}` : `ﾎﾞｹ気味 ${lapVar.toFixed(0)}`);
+  $('m-focus').className    = 'metric-value ' + (focusGood ? 'good' : 'bad');
+  $('cell-focus').className = 'metric-cell ' + (focusGood ? 'good' : 'bad');
+
+  $('m-stable').textContent = stableGood ? `OK ${diffNorm.toFixed(1)}` : `ぶれ ${diffNorm.toFixed(1)}`;
+  $('m-stable').className   = 'metric-value ' + (stableGood ? 'good' : 'bad');
+  $('cell-stable').className= 'metric-cell ' + (stableGood ? 'good' : 'bad');
+
+  let brightLabel;
+  if (meanLuma < 60) brightLabel = `暗 ${meanLuma.toFixed(0)}`;
+  else if (meanLuma > 220) brightLabel = `白飛 ${meanLuma.toFixed(0)}`;
+  else brightLabel = `OK ${meanLuma.toFixed(0)}`;
+  $('m-bright').textContent = brightLabel;
+  $('m-bright').className   = 'metric-value ' + (brightGood ? 'good' : 'bad');
+  $('cell-bright').className= 'metric-cell ' + (brightGood ? 'good' : 'bad');
+
+  const allGood = focusGood && stableGood && brightGood;
+  $('guide').classList.toggle('locked', allGood);
+
+  if (allGood) {
+    State.stableFrames++;
+    if (State.stableFrames === 1) setStatus('locked'); // first lock frame
+    const remaining = Math.max(0, StableThresholdFrames - State.stableFrames);
+    setCountdown(remaining);
+    updateProgressRing(remaining);
+  } else {
+    if (State.stableFrames > 0) {
+      // Was locked, lost lock
+      setStatus('detecting');
+      updateProgressRing(StableThresholdFrames);
+    } else if (State.detect === 'waiting' || State.detect === 'locked') {
+      setStatus('detecting');
+    }
+    State.stableFrames = 0;
+  }
+
+  if (State.autoCapture
+      && State.stableFrames >= StableThresholdFrames
+      && !State.ocrInflight
+      && (Date.now() - State.lastCaptureTs) > State.COOLDOWN_MS) {
+    State.lastCaptureTs = Date.now();
+    State.stableFrames = 0;
+    captureLive();
+  }
+}
+
+function fireCaptureFeedback() {
+  // White flash
+  const f = $('flash');
+  f.classList.add('fire');
+  setTimeout(() => f.classList.remove('fire'), 400);
+  // Haptic
+  if (navigator.vibrate) navigator.vibrate(60);
+}
+
+function captureLive() {
+  const video = $('cam');
+  if (!State.roi) return;
+  setStatus('capturing');
+  fireCaptureFeedback();
+
+  const { sx, sy, sw, sh } = State.roi;
+  const c = document.createElement('canvas');
+  const outW = Math.min(1280, sw);
+  const outH = Math.round(outW * (sh / sw));
+  c.width = outW; c.height = outH;
+  c.getContext('2d').drawImage(video, sx, sy, sw, sh, 0, 0, outW, outH);
+  beginReview(c.toDataURL('image/jpeg', 0.85));
+}
+
+$('btn-shutter').addEventListener('click', () => {
+  if (State.camera !== 'running') { toast('カメラ未起動', 'error'); return; }
+  captureLive();
+});
+
+$('btn-auto').addEventListener('click', () => {
+  State.autoCapture = !State.autoCapture;
+  $('btn-auto').classList.toggle('on', State.autoCapture);
+  $('btn-auto').textContent = State.autoCapture ? 'AUTO' : 'MANUAL';
+});
+
+// ─── Review / OCR ───
+function beginReview(dataUrl) {
+  State.current = {
+    id: 'mw_' + Date.now(),
+    image: dataUrl,
+    fields: Object.fromEntries(FIELDS.map(f => [f.key, ''])),
+    security: 'normal',
+    ts: new Date().toISOString(),
+  };
+  $('tab-review').disabled = false;
+  switchView('review');
+  $('review-img').src = dataUrl;
+  renderFields(true);
+  runOCR(dataUrl);
+}
+
+const OCR_PROMPT = `あなたは日本の名刺OCRエキスパートです。提供された名刺画像から以下のフィールドを抽出し、JSON のみで返答してください。コードフェンス（\`\`\`）や前置きは不要です。
+
+抽出フィールド（キーは英語、値は名刺記載のとおり）:
+- company: 会社名（株式会社などの法人格を含む正式名称）
+- department: 部署名
+- title: 役職
+- name: 氏名（漢字）
+- name_reading: ふりがな または ローマ字
+- email: メールアドレス（複数あれば配列）
+- phone: 固定電話番号（ハイフン付き 例: 03-1234-5678）
+- mobile: 携帯電話番号
+- fax: FAX番号
+- postal_code: 郵便番号（例: 600-8086）
+- address: 住所
+- website: ウェブサイトURL
+- other: 上記に該当しない情報（QRコード、SNS、スローガン等）
+
+ルール:
+- 読み取れない / 記載がない項目は null
+- 日本語・英語両面記載の名刺は統合して抽出
+- 必ず有効な JSON のみを返す`;
+
+async function runOCR(dataUrl) {
+  State.ocrInflight = true;
+  $('review-status').innerHTML = '<div class="spinner"></div><span>Claude Vision で解析中...</span>';
+  diag('OCR request sent');
+  const base64 = dataUrl.split(',')[1];
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+            { type: 'text',  text: OCR_PROMPT },
+          ],
+        }],
+      }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    const text = json.content.filter(b => b.type==='text').map(b => b.text).join('').trim();
+    const cleaned = text.replace(/^```json\s*/i,'').replace(/```$/,'').trim();
+    const parsed = JSON.parse(cleaned);
+    for (const f of FIELDS) {
+      let v = parsed[f.key];
+      if (Array.isArray(v)) v = v.join(', ');
+      if (v == null) v = '';
+      State.current.fields[f.key] = String(v);
+    }
+    renderFields(false);
+    $('review-status').innerHTML = `<span style="color:var(--ok)">✓ 解析完了 — 確認・編集して保存してください</span>`;
+    diag('OCR success', 'ok');
+  } catch (e) {
+    diag(`OCR FAILED: ${e.message}`, 'err');
+    $('review-status').innerHTML = `<span style="color:var(--danger)">✗ OCR失敗: ${e.message} — 手動入力してください</span>`;
+  } finally {
+    State.ocrInflight = false;
+  }
+}
+
+function renderFields(blank) {
+  const container = $('fields-container');
+  container.innerHTML = '';
+  for (const f of FIELDS) {
+    const wrap = document.createElement('div');
+    wrap.className = 'field-group';
+    const label = document.createElement('div');
+    label.className = 'field-label';
+    label.textContent = f.label;
+    let input;
+    if (f.multiline) input = document.createElement('textarea');
+    else { input = document.createElement('input'); input.type = 'text'; }
+    input.className = 'field-input' + (f.mono ? ' mono' : '');
+    input.value = blank ? '' : (State.current.fields[f.key] || '');
+    input.placeholder = '—';
+    input.addEventListener('input', () => { State.current.fields[f.key] = input.value; });
+    wrap.appendChild(label); wrap.appendChild(input);
+    container.appendChild(wrap);
+  }
+  const sec = document.createElement('div');
+  sec.className = 'security-row';
+  sec.innerHTML = `
+    <div class="sec-title">アクセス区分</div>
+    <div class="sec-options">
+      <button class="sec-pill ${State.current.security==='normal'?'active normal':''}" data-sec="normal">通常 (フォルダ共有)</button>
+      <button class="sec-pill ${State.current.security==='confidential'?'active confidential':''}" data-sec="confidential">機密 (個別指定)</button>
+    </div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-faint);margin-top:4px">
+      機密区分: 社長室名刺など、閲覧者を個別に指定する名刺。Phase 2 で閲覧者選択UI実装。
+    </div>
+  `;
+  sec.querySelectorAll('.sec-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      State.current.security = btn.dataset.sec;
+      renderFields(false);
+    });
+  });
+  container.appendChild(sec);
+}
+
+$('btn-save').addEventListener('click', () => {
+  if (!State.current) return;
+  State.cards.unshift(State.current);
+  State.current = null;
+  $('count').textContent = State.cards.length;
+  $('tab-review').disabled = true;
+  renderList();
+  toast('保存しました', 'ok');
+  switchView('capture');
+  // 動画モードに戻った場合は次の検出に備えて待機状態にリセット
+  if (State.mode === 'live' && State.camera === 'running') setStatus('waiting');
+});
+
+$('btn-retake').addEventListener('click', () => {
+  State.current = null;
+  $('tab-review').disabled = true;
+  switchView('capture');
+  if (State.mode === 'live' && State.camera === 'running') setStatus('waiting');
+});
+
+function renderList() {
+  const list = $('card-list');
+  if (State.cards.length === 0) {
+    list.innerHTML = `<div class="empty-state">まだ名刺がありません</div>`;
+    return;
+  }
+  list.innerHTML = '';
+  for (const card of State.cards) {
+    const div = document.createElement('div');
+    div.className = 'card-item ' + (card.security || 'normal');
+    const f = card.fields;
+    div.innerHTML = `
+      <img class="card-thumb" src="${card.image}" alt="">
+      <div class="card-meta">
+        <div class="name">${escapeHtml(f.name || '（氏名なし）')}${card.security==='confidential' ? '<span class="sec-flag confidential">機密</span>' : ''}</div>
+        <div class="company">${escapeHtml(f.company || '')} ${f.title ? '· '+escapeHtml(f.title) : ''}</div>
+        <div class="title-line">${escapeHtml(f.email || f.phone || f.mobile || '')}</div>
+      </div>
+    `;
+    div.addEventListener('click', () => {
+      State.current = JSON.parse(JSON.stringify(card));
+      State.cards = State.cards.filter(c => c.id !== card.id);
+      $('count').textContent = State.cards.length;
+      $('tab-review').disabled = false;
+      switchView('review');
+      $('review-img').src = card.image;
+      $('review-status').innerHTML = `<span>編集モード</span>`;
+      renderFields(false);
+    });
+    list.appendChild(div);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+$('btn-export').addEventListener('click', () => {
+  if (State.cards.length === 0) { toast('出力するデータがありません', 'error'); return; }
+  const out = State.cards.map(c => ({ id: c.id, ts: c.ts, security: c.security, fields: c.fields }));
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `mw_meishi_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`${out.length}件をJSONで出力`, 'ok');
+});
+
+$('btn-clear').addEventListener('click', () => {
+  if (State.cards.length === 0) return;
+  if (!confirm(`${State.cards.length}件の名刺を全て削除します。よろしいですか？`)) return;
+  State.cards = []; $('count').textContent = 0; renderList();
+});
+
+function switchView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  $('view-' + name).classList.add('active');
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+}
+
+document.querySelectorAll('.tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.disabled) return;
+    switchView(btn.dataset.view);
+    if (btn.dataset.view === 'list') renderList();
+  });
+});
+
+runInitialDiagnostic();
+renderList();
+setStatus('idle');
+</script>
+</body>
+</html>
